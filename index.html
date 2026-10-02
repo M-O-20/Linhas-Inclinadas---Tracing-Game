@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="pt" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Linhas Inclinadas - Tracing Game</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Quicksand:wght@600;700&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Quicksand', 'Fredoka', sans-serif;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            background: #f4f8fb;
+            min-height: 100vh;
+        }
+
+        /* Outer Frame and Inner Dashed Border */
+        .page-double-frame {
+            border: 4px solid #ea6685;
+            border-radius: 20px;
+            padding: 8px;
+            background-color: #fff;
+            box-shadow: 0 10px 25px -5px rgba(234, 102, 133, 0.15);
+        }
+
+        .inner-dashed-frame {
+            border: 2px dashed #ea6685;
+            border-radius: 12px;
+            background-color: #ffffff;
+            position: relative;
+        }
+
+        .pencil-cursor {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="%23ea6685"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>') 0 32, pointer;
+        }
+
+        canvas {
+            touch-action: none;
+        }
+
+        .bounce-gentle {
+            animation: bounceGentle 2.5s infinite ease-in-out;
+        }
+
+        @keyframes bounceGentle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+
+        /* Toolbar active states */
+        .color-btn.active { transform: scale(1.2); border-color: #333; }
+        .size-btn.active { background-color: #ea6685; color: white; border-color: #be123c; }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; padding: 0 !important; }
+            .worksheet-container { box-shadow: none !important; border: none !important; width: 100% !important; }
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen text-slate-800 antialiased overflow-x-hidden pt-4">
+
+    <!-- Top Interactive Toolbar -->
+    <header class="w-full max-w-5xl mx-auto px-4 mb-4 no-print flex justify-center">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-2.5 flex flex-wrap items-center justify-between gap-6 w-full">
+            
+            <!-- Progress -->
+            <div class="flex items-center gap-2 bg-pink-50 px-3 py-1.5 rounded-xl border border-pink-100">
+                <i class="fa-solid fa-star text-yellow-400 text-lg"></i>
+                <div class="flex flex-col">
+                    <span class="text-[10px] font-bold text-pink-500 uppercase tracking-wider leading-none">Progress</span>
+                    <span class="text-sm font-bold text-slate-700 leading-none mt-1"><span id="completed-count">0</span> / <span id="total-count">42</span> Lines</span>
+                </div>
+            </div>
+
+            <!-- Colors -->
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-400 uppercase">Color:</span>
+                <div class="flex items-center gap-1.5" id="color-palette">
+                    <button data-color="#ea6685" class="w-6 h-6 rounded-full bg-[#ea6685] shadow-sm transition color-btn active"></button>
+                    <button data-color="#22c55e" class="w-6 h-6 rounded-full bg-[#22c55e] shadow-sm transition color-btn"></button>
+                    <button data-color="#3b82f6" class="w-6 h-6 rounded-full bg-[#3b82f6] shadow-sm transition color-btn"></button>
+                    <button data-color="#a855f7" class="w-6 h-6 rounded-full bg-[#a855f7] shadow-sm transition color-btn"></button>
+                    <button data-color="#f59e0b" class="w-6 h-6 rounded-full bg-[#f59e0b] shadow-sm transition color-btn"></button>
+                    <button data-color="rainbow" class="w-6 h-6 rounded-full bg-gradient-to-r from-red-500 via-green-500 to-blue-500 shadow-sm transition color-btn"></button>
+                </div>
+            </div>
+
+            <!-- Size -->
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-400 uppercase">Size:</span>
+                <div class="flex bg-slate-50 rounded-lg p-0.5 border border-slate-200">
+                    <button data-size="8" class="px-3 py-1 text-xs font-bold rounded-md text-slate-500 hover:text-slate-800 transition size-btn">Thin</button>
+                    <button data-size="14" class="px-3 py-1 text-xs font-bold rounded-md text-slate-500 hover:text-slate-800 transition size-btn active">Med</button>
+                    <button data-size="22" class="px-3 py-1 text-xs font-bold rounded-md text-slate-500 hover:text-slate-800 transition size-btn">Thick</button>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-2">
+                <button id="btn-sound" class="w-8 h-8 rounded-lg bg-yellow-50 text-yellow-600 hover:bg-yellow-100 flex items-center justify-center transition">
+                    <i class="fa-solid fa-volume-high text-sm"></i>
+                </button>
+                <button id="btn-clear" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-50 text-pink-600 hover:bg-pink-100 font-bold text-xs transition border border-pink-100">
+                    <i class="fa-solid fa-rotate-right"></i> Reset
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Worksheet Area -->
+    <main class="flex-1 max-w-4xl w-full mx-auto p-3 md:p-6 flex flex-col items-center justify-center">
+
+        <div class="worksheet-container w-full page-double-frame bg-white">
+            <div class="inner-dashed-frame p-6 md:p-8 flex flex-col items-center">
+
+                <!-- Header Row -->
+                <div class="w-full flex items-center justify-between mb-4 px-4 relative">
+                    <div class="text-4xl md:text-5xl drop-shadow-sm select-none absolute left-4">☁️</div>
+                    <div class="text-center w-full">
+                        <h1 class="text-3xl md:text-5xl font-black tracking-wide font-['Fredoka'] text-[#ea6685] mb-2">
+                            Linhas Inclinadas
+                        </h1>
+                        <p class="text-slate-700 font-bold text-sm md:text-base">
+                            Trace as linhas inclinadas da esquerda para a direita.
+                        </p>
+                    </div>
+                    <div class="text-4xl md:text-5xl bounce-gentle drop-shadow-sm select-none absolute right-4">☀️</div>
+                </div>
+
+                <!-- Interactive Canvas -->
+                <div class="relative w-full aspect-[3/4] max-h-[760px] my-4 overflow-hidden pencil-cursor" id="canvas-wrapper">
+                    <canvas id="tracing-canvas" class="w-full h-full block"></canvas>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Enhanced Web Audio API Sound Effects Class
+        class SoundEffects {
+            constructor() { 
+                this.enabled = true; 
+                this.audioCtx = null;
+                this.drawOscillator = null;
+                this.drawGain = null;
+            }
+
+            init() {
+                if (!this.audioCtx) {
+                    this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (this.audioCtx.state === 'suspended') {
+                    this.audioCtx.resume();
+                }
+            }
+
+            playPop() { 
+                if(!this.enabled || !this.audioCtx) return;
+                const osc = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(this.audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, this.audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(200, this.audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.5, this.audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.1);
+                osc.start();
+                osc.stop(this.audioCtx.currentTime + 0.1);
+            }
+
+            playLineComplete() { 
+                if(!this.enabled || !this.audioCtx) return;
+                const osc = this.audioCtx.createOscillator();
+                const gain = this.audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(this.audioCtx.destination);
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(400, this.audioCtx.currentTime);
+                osc.frequency.setValueAtTime(600, this.audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, this.audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.3);
+                osc.start();
+                osc.stop(this.audioCtx.currentTime + 0.3);
+            }
+
+            startDrawingSound() {
+                if (!this.enabled || !this.audioCtx) return;
+                if (this.drawOscillator) this.stopDrawingSound();
+
+                this.drawOscillator = this.audioCtx.createOscillator();
+                this.drawGain = this.audioCtx.createGain();
+                
+                this.drawOscillator.type = 'sine';
+                this.drawOscillator.frequency.setValueAtTime(250, this.audioCtx.currentTime); // Soft hum
+                
+                this.drawGain.gain.setValueAtTime(0, this.audioCtx.currentTime);
+                this.drawGain.gain.linearRampToValueAtTime(0.1, this.audioCtx.currentTime + 0.05);
+
+                this.drawOscillator.connect(this.drawGain);
+                this.drawGain.connect(this.audioCtx.destination);
+                this.drawOscillator.start();
+            }
+
+            stopDrawingSound() {
+                if (this.drawOscillator && this.drawGain) {
+                    this.drawGain.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + 0.05);
+                    this.drawOscillator.stop(this.audioCtx.currentTime + 0.05);
+                    this.drawOscillator = null;
+                    this.drawGain = null;
+                }
+            }
+        }
+        
+        const soundFX = new SoundEffects();
+
+        const rowEmojis = [
+            { left: "⭐", right: "☁️" },
+            { left: "🐝", right: "🍯" },
+            { left: "☂️", right: "💧" },
+            { left: "🥕", right: "🐰" },
+            { left: "🏠", right: "🌳" },
+            { left: "🌿", right: "🦋" }
+        ];
+
+        let activeColor = "#ea6685";
+        let brushSize = 14;
+
+        const canvas = document.getElementById('tracing-canvas');
+        const ctx = canvas.getContext('2d');
+        let canvasWidth = 800;
+        let canvasHeight = 900;
+
+        let levelLines = [];
+        let isDrawing = false;
+        let activeLineIndex = null;
+
+        function setupCanvas() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            const rect = wrapper.getBoundingClientRect();
+            
+            canvasWidth = rect.width;
+            canvasHeight = rect.height;
+
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvasWidth * dpr;
+            canvas.height = canvasHeight * dpr;
+            ctx.scale(dpr, dpr);
+
+            initWorksheetLines();
+            renderCanvas();
+        }
+
+        // Generate discrete slanted lines
+        function initWorksheetLines() {
+            const rows = 6;
+            const linesPerRow = 7;
+            const rowHeight = canvasHeight / rows;
+            const startX = canvasWidth * 0.18;
+            const endX = canvasWidth * 0.82;
+
+            levelLines = [];
+            for (let r = 0; r < rows; r++) {
+                const centerY = rowHeight * (r + 0.5);
+                for (let i = 0; i < linesPerRow; i++) {
+                    const cx = startX + (i / (linesPerRow - 1)) * (endX - startX);
+                    // Create diagonal line spanning down and to the right
+                    const slantX = canvasWidth * 0.015; 
+                    const slantY = rowHeight * 0.25;
+
+                    const p1 = { x: cx - slantX, y: centerY - slantY };
+                    const p2 = { x: cx + slantX, y: centerY + slantY };
+
+                    levelLines.push({
+                        rowIndex: r,
+                        points: [p1, p2],
+                        startPoint: p1,
+                        endPoint: p2,
+                        userStroke: [],
+                        completed: false
+                    });
+                }
+            }
+            
+            document.getElementById('total-count').innerText = levelLines.length;
+            updateStarsCount();
+        }
+
+        function renderCanvas() {
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+            // Draw Emojis per row
+            const rowHeight = canvasHeight / 6;
+            ctx.save();
+            ctx.font = `${Math.min(rowHeight * 0.4, 40)}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            for (let r = 0; r < 6; r++) {
+                const y = rowHeight * (r + 0.5);
+                ctx.fillText(rowEmojis[r].left, canvasWidth * 0.08, y);
+                ctx.fillText(rowEmojis[r].right, canvasWidth * 0.92, y);
+            }
+            ctx.restore();
+
+            // Draw Lines
+            levelLines.forEach((line) => {
+                drawTargetGuideLine(line);
+                drawUserStroke(line);
+                drawStartEndIndicators(line);
+            });
+        }
+
+        function drawTargetGuideLine(line) {
+            ctx.save();
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.beginPath();
+            ctx.moveTo(line.points[0].x, line.points[0].y);
+            ctx.lineTo(line.points[1].x, line.points[1].y);
+            
+            ctx.strokeStyle = line.completed ? "#fbcfe8" : "#f472b6"; // Pink dashes
+            ctx.lineWidth = line.completed ? brushSize + 2 : 3;
+            ctx.setLineDash(line.completed ? [] : [6, 8]);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawUserStroke(line) {
+            if (line.userStroke.length < 2) return;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(line.userStroke[0].x, line.userStroke[0].y);
+            for (let i = 1; i < line.userStroke.length - 1; i++) {
+                const xc = (line.userStroke[i].x + line.userStroke[i + 1].x) / 2;
+                const yc = (line.userStroke[i].y + line.userStroke[i + 1].y) / 2;
+                ctx.quadraticCurveTo(line.userStroke[i].x, line.userStroke[i].y, xc, yc);
+            }
+            const last = line.userStroke[line.userStroke.length - 1];
+            ctx.lineTo(last.x, last.y);
+
+            if (activeColor === "rainbow") {
+                const grad = ctx.createLinearGradient(0, 0, canvasWidth, canvasHeight);
+                grad.addColorStop(0, "#ef4444"); grad.addColorStop(0.5, "#22c55e"); grad.addColorStop(1, "#3b82f6");
+                ctx.strokeStyle = grad;
+            } else {
+                ctx.strokeStyle = line.completed ? "#22c55e" : activeColor;
+            }
+
+            ctx.lineWidth = brushSize;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawStartEndIndicators(line) {
+            ctx.save();
+            const sp = line.startPoint;
+            
+            // Start Pink/Red Dot
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, line.completed ? 6 : 8, 0, Math.PI * 2);
+            ctx.fillStyle = line.completed ? "#22c55e" : "#ea6685";
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function updateStarsCount() {
+            const completed = levelLines.filter(l => l.completed).length;
+            document.getElementById('completed-count').innerText = completed;
+            if (completed === levelLines.length && completed > 0) {
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            }
+        }
+
+        function distance(p1, p2) {
+            return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+        }
+
+        function getCanvasPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: (clientX - rect.left) * (canvasWidth / rect.width),
+                y: (clientY - rect.top) * (canvasHeight / rect.height)
+            };
+        }
+
+        function handleStart(e) {
+            e.preventDefault();
+            soundFX.init();
+            const pt = getCanvasPoint(e);
+            let nearestIdx = null;
+            let minDist = 40; // Detection radius
+
+            levelLines.forEach((line, idx) => {
+                if (!line.completed) {
+                    const d = distance(pt, line.startPoint);
+                    if (d < minDist) {
+                        minDist = d;
+                        nearestIdx = idx;
+                    }
+                }
+            });
+
+            if (nearestIdx !== null) {
+                isDrawing = true;
+                activeLineIndex = nearestIdx;
+                levelLines[activeLineIndex].userStroke = [levelLines[activeLineIndex].startPoint, pt];
+                soundFX.startDrawingSound(); // Start hum sound
+                renderCanvas();
+            }
+        }
+
+        function handleMove(e) {
+            if (!isDrawing || activeLineIndex === null) return;
+            e.preventDefault();
+            const pt = getCanvasPoint(e);
+            const line = levelLines[activeLineIndex];
+
+            line.userStroke.push(pt);
+            
+            // Check completion
+            if (distance(pt, line.endPoint) < 35) {
+                line.completed = true;
+                line.userStroke.push(line.endPoint);
+                isDrawing = false;
+                activeLineIndex = null;
+                soundFX.stopDrawingSound();
+                soundFX.playLineComplete(); // Play success chime
+                updateStarsCount();
+            }
+            renderCanvas();
+        }
+
+        function handleEnd(e) {
+            if (!isDrawing) return;
+            isDrawing = false;
+            soundFX.stopDrawingSound(); // Stop sound when lifting finger/mouse
+
+            if (activeLineIndex !== null && !levelLines[activeLineIndex].completed) {
+                levelLines[activeLineIndex].userStroke = []; // Clear if not finished
+            }
+            activeLineIndex = null;
+            renderCanvas();
+        }
+
+        window.addEventListener('load', () => {
+            setupCanvas();
+            window.addEventListener('resize', setupCanvas);
+
+            // Canvas Interaction
+            canvas.addEventListener('mousedown', handleStart);
+            canvas.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleEnd);
+            canvas.addEventListener('touchstart', handleStart, { passive: false });
+            canvas.addEventListener('touchmove', handleMove, { passive: false });
+            window.addEventListener('touchend', handleEnd);
+
+            // Toolbar Selectors
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    soundFX.init();
+                    soundFX.playPop();
+                    document.querySelectorAll('.color-btn').forEach(b => {
+                        b.classList.remove('active');
+                        b.style.borderColor = 'transparent';
+                    });
+                    btn.classList.add('active');
+                    activeColor = btn.dataset.color;
+                });
+            });
+
+            document.querySelectorAll('.size-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    soundFX.init();
+                    soundFX.playPop();
+                    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active', 'bg-[#ea6685]', 'text-white'));
+                    btn.classList.add('active', 'bg-[#ea6685]', 'text-white');
+                    brushSize = parseInt(btn.dataset.size);
+                });
+            });
+
+            // Utilities
+            document.getElementById('btn-sound').addEventListener('click', function() {
+                soundFX.init();
+                soundFX.enabled = !soundFX.enabled;
+                if(soundFX.enabled) soundFX.playPop();
+                this.innerHTML = soundFX.enabled ? '<i class="fa-solid fa-volume-high text-sm"></i>' : '<i class="fa-solid fa-volume-xmark text-sm text-red-500"></i>';
+            });
+
+            document.getElementById('btn-clear').addEventListener('click', () => {
+                soundFX.init();
+                soundFX.playPop();
+                levelLines.forEach(l => { l.userStroke = []; l.completed = false; });
+                updateStarsCount();
+                renderCanvas();
+            });
+        });
+    </script>
+</body>
+</html>
